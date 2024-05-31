@@ -1,0 +1,55 @@
+version: "3.8"
+
+networks:
+  k6-prometheus: # Network for stress test env
+  prometheus-grafana: # Network for monitoring env
+
+services:
+  targetapp:
+    build: ./targetapp
+    ports:
+      - "5000:5000"
+    networks:
+      - k6-prometheus
+
+  k6:
+    image: grafana/k6:0.49.0
+    ports:
+      - "6565:6565"
+    volumes:
+      - type: bind
+        source: "./scripts"
+        target: "/scripts"
+    environment:
+      - K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write
+    networks:
+      - k6-prometheus
+
+  prometheus:
+    image: prom/prometheus:v2.49.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - type: bind
+        source: "./prometheus.yml"
+        target: "/etc/prometheus/prometheus.yml"
+      - type: bind
+        source: "./prometheus-data"
+        target: "/prometheus"
+    networks:
+      - k6-prometheus
+      - prometheus-grafana
+    command:
+      - "--web.enable-remote-write-receiver"
+      - "--config.file=/etc/prometheus/prometheus.yml"
+
+  grafana:
+    image: grafana/grafana:10.3.1
+    ports:
+      - "3000:3000"
+    volumes:
+      - type: bind
+        source: "./grafana"
+        target: "/etc/grafana/provisioning"
+    networks:
+      - prometheus-grafana
